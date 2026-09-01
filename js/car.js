@@ -1,7 +1,7 @@
 /**
- * Hyperdrive 3D - Ultra-Realistic Supercar Generator & 3D Model Integrator
+ * Hyperdrive 3D - Supercar Generator & 3D Model Integrator
  * Features:
- * 1. Bugatti Chiron 2017 (Real 3D Blender Mesh with dynamic PBR shaders & independent wheel physics)
+ * 1. Bugatti Chiron 2017 (3D Blender Model with dynamic PBR shaders & independent wheel physics)
  * 2. Venom GT (Widebody Muscle Supercar)
  * 3. Cyberpunk Rayfield (Futuristic Cyber Roadster)
  * 4. Centenario Spider (Exotic Italian Supercar)
@@ -34,7 +34,6 @@ const CarBuilder = {
 
       const tryLoadGLB = (index) => {
         if (index >= glbUrls.length) {
-          // Fallback to OBJ + MTL
           this.loadOBJModel();
           return;
         }
@@ -45,8 +44,9 @@ const CarBuilder = {
             console.log('🏎️ Bugatti Chiron 3D GLB Model Loaded successfully!');
             this.modelCache.bugatti = gltf.scene;
             this.modelCache.loading = false;
-            this.modelCache.callbacks.forEach(cb => cb(this.modelCache.bugatti));
+            const cbs = [...this.modelCache.callbacks];
             this.modelCache.callbacks = [];
+            cbs.forEach(cb => cb(this.modelCache.bugatti));
           },
           undefined,
           (err) => {
@@ -135,7 +135,6 @@ const CarBuilder = {
       if (c.parent) c.parent.remove(c);
     });
 
-    // Centers and alignment calculations
     const carCenter = new THREE.Vector3(-0.1665, 0.939, -1.2815);
     const yaw = 0.159007; // ~9.11 deg
     const scale = 0.3296;
@@ -163,8 +162,9 @@ const CarBuilder = {
     bodyGroup.add(obj);
     this.modelCache.bugatti = carGroup;
     this.modelCache.loading = false;
-    this.modelCache.callbacks.forEach(cb => cb(this.modelCache.bugatti));
+    const cbs = [...this.modelCache.callbacks];
     this.modelCache.callbacks = [];
+    cbs.forEach(cb => cb(this.modelCache.bugatti));
   },
 
   /**
@@ -183,40 +183,127 @@ const CarBuilder = {
       this.preload();
     }
 
+    // Root vehicle group that stays constant
+    const carGroup = new THREE.Group();
+    carGroup.name = isPlayer ? `PlayerCar_${type}` : `TrafficCar_${type}`;
+
+    // Child container for vehicle body geometry & wheels
+    const modelContainer = new THREE.Group();
+    modelContainer.name = 'ModelContainer';
+    carGroup.add(modelContainer);
+
+    // Initial vehicle data object
+    const carData = {
+      group: carGroup,
+      modelContainer: modelContainer,
+      type: type,
+      wheels: [],
+      frontPivots: [],
+      steeringWheel: null,
+      exhaustTips: [],
+      bodyMaterial: null,
+      underglowMesh: null,
+      underglowLight: null,
+      brakeGlow: null,
+      tailLights: [],
+      headlights: { leftSpot: null, rightSpot: null },
+      is3DModel: false
+    };
+
+    // Lights setup
+    this.setupVehicleLights(carData, config);
+
+    // Populate modelContainer with appropriate geometry
     if (type === 'hypercar' && this.modelCache.bugatti) {
-      return this.buildBugattiFrom3DModel(config);
-    }
+      this.populateBugattiModel(carData, config);
+    } else {
+      this.populateProceduralModel(carData, config);
 
-    // Procedural generation (also used for fallback while 3D model loads)
-    const carData = this.buildProceduralCar(config);
-
-    // If hypercar was requested and 3D model is still loading, auto-upgrade when ready
-    if (type === 'hypercar' && !this.modelCache.bugatti) {
-      this.preload((bugattiScene) => {
-        if (!carData.group.parent) return; // Car was removed/destroyed
-        this.upgradeToBugattiModel(carData, config);
-      });
+      // If hypercar was requested and 3D model is still downloading, upgrade once ready
+      if (type === 'hypercar' && !this.modelCache.bugatti) {
+        this.preload(() => {
+          if (!carData.group.parent) return; // Car was removed
+          this.populateBugattiModel(carData, config);
+        });
+      }
     }
 
     return carData;
   },
 
   /**
-   * Build Bugatti Chiron from preloaded 3D model
+   * Setup headlights, underglow, and brake lighting
    */
-  buildBugattiFrom3DModel: function(config = {}) {
-    const {
-      bodyColor = 0x00f0ff,
-      isPlayer = false,
-      underglowColor = 0x00f0ff
-    } = config;
+  setupVehicleLights: function(carData, config) {
+    const { isPlayer = false, underglowColor = 0x00f0ff } = config;
+    const carGroup = carData.group;
 
-    const carGroup = new THREE.Group();
-    carGroup.name = isPlayer ? 'PlayerCar_BugattiChiron' : 'TrafficCar_BugattiChiron';
+    // Spotlights for player car
+    let leftSpot = null;
+    let rightSpot = null;
+    if (isPlayer) {
+      leftSpot = new THREE.SpotLight(0xffffff, 3.8, 80, Math.PI / 6, 0.35, 1.2);
+      leftSpot.position.set(-0.72, 0.58, 2.15);
+      const leftTarget = new THREE.Object3D();
+      leftTarget.position.set(-0.72, 0, 45);
+      carGroup.add(leftSpot, leftTarget);
+      leftSpot.target = leftTarget;
+
+      rightSpot = new THREE.SpotLight(0xffffff, 3.8, 80, Math.PI / 6, 0.35, 1.2);
+      rightSpot.position.set(0.72, 0.58, 2.15);
+      const rightTarget = new THREE.Object3D();
+      rightTarget.position.set(0.72, 0, 45);
+      carGroup.add(rightSpot, rightTarget);
+      rightSpot.target = rightTarget;
+    }
+    carData.headlights = { leftSpot, rightSpot };
+
+    // Brake Glow Light
+    const brakeGlowLight = new THREE.PointLight(0xff0022, 0.9, 8);
+    brakeGlowLight.position.set(0, 0.62, -2.5);
+    carGroup.add(brakeGlowLight);
+    carData.brakeGlow = brakeGlowLight;
+
+    // Neon Underglow
+    const underglowGeo = new THREE.PlaneGeometry(1.6, 3.6);
+    const underglowMat = new THREE.MeshBasicMaterial({
+      color: underglowColor,
+      transparent: true,
+      opacity: 0.75,
+      blending: THREE.AdditiveBlending
+    });
+    const underglow = new THREE.Mesh(underglowGeo, underglowMat);
+    underglow.rotation.x = -Math.PI / 2;
+    underglow.position.set(0, 0.06, 0);
+    carGroup.add(underglow);
+    carData.underglowMesh = underglow;
+
+    const underglowLight = new THREE.PointLight(underglowColor, 1.3, 5.5);
+    underglowLight.position.set(0, 0.2, 0);
+    carGroup.add(underglowLight);
+    carData.underglowLight = underglowLight;
+  },
+
+  /**
+   * Populate modelContainer with the 3D Bugatti Chiron mesh
+   */
+  populateBugattiModel: function(carData, config = {}) {
+    const { bodyColor = 0x00f0ff, isPlayer = false } = config;
+    const container = carData.modelContainer;
+
+    // Clear previous placeholder geometry
+    while (container.children.length > 0) {
+      container.remove(container.children[0]);
+    }
+
+    carData.wheels = [];
+    carData.frontPivots = [];
+    carData.tailLights = [];
+    carData.exhaustTips = [];
 
     // Clone Bugatti hierarchy
     const model = this.modelCache.bugatti.clone(true);
-    carGroup.add(model);
+    container.add(model);
 
     // Dynamic Body Paint Material
     const bodyMat = new THREE.MeshStandardMaterial({
@@ -225,6 +312,7 @@ const CarBuilder = {
       roughness: 0.15,
       envMapIntensity: 1.8
     });
+    carData.bodyMaterial = bodyMat;
 
     const carbonMat = new THREE.MeshStandardMaterial({
       color: 0x111827,
@@ -256,20 +344,15 @@ const CarBuilder = {
     });
 
     // Find and configure body meshes & wheels
-    const wheels = [];
-    const frontPivots = [];
-    const bodyMeshes = [];
-    const tailLightMeshes = [];
-
     model.traverse(child => {
       if (child.name.includes('_Pivot')) {
         if (child.name.includes('FL') || child.name.includes('FR')) {
-          frontPivots.push(child);
+          carData.frontPivots.push(child);
         }
       }
 
       if (child.name.includes('_Spin')) {
-        wheels.push(child);
+        carData.wheels.push(child);
       }
 
       if (child.isMesh) {
@@ -278,23 +361,21 @@ const CarBuilder = {
 
         const matName = child.material ? (Array.isArray(child.material) ? child.material[0]?.name : child.material.name) : '';
 
-        // Assign responsive body materials
         if (matName.includes('BLUE') || matName.includes('NAVY') || child.name.includes('Plane.028')) {
           child.material = bodyMat;
-          bodyMeshes.push(child);
         } else if (matName.includes('glass') || matName.includes('window')) {
           child.material = glassMat;
         } else if (matName.includes('silver') || matName.includes('Trim') || matName.includes('aluminiumm')) {
           child.material = chromeMat;
         } else if (matName.includes('red') || matName.includes('breaks') || child.name.includes('Plane.014')) {
           child.material = tailLightMat;
-          tailLightMeshes.push(child);
+          carData.tailLights.push(child);
         }
       }
     });
 
-    // Fallback wheels if hierarchy structure was flat
-    if (wheels.length === 0) {
+    // Fallback wheels if hierarchy was flat
+    if (carData.wheels.length === 0) {
       const wheelPositions = [
         { x: -0.90, y: 0.35, z: 1.35, isFront: true },
         { x: 0.90,  y: 0.35, z: 1.35, isFront: true },
@@ -322,13 +403,13 @@ const CarBuilder = {
           const pivot = new THREE.Group();
           pivot.position.set(pos.x, pos.y, pos.z);
           pivot.add(wGroup);
-          carGroup.add(pivot);
-          frontPivots.push(pivot);
+          container.add(pivot);
+          carData.frontPivots.push(pivot);
         } else {
           wGroup.position.set(pos.x, pos.y, pos.z);
-          carGroup.add(wGroup);
+          container.add(wGroup);
         }
-        wheels.push(wGroup);
+        carData.wheels.push(wGroup);
       });
     }
 
@@ -343,119 +424,46 @@ const CarBuilder = {
     steerGroup.add(steerRing);
     steerGroup.rotation.x = 0.35;
     interiorGroup.add(steerGroup);
-    carGroup.add(interiorGroup);
+    container.add(interiorGroup);
+    carData.steeringWheel = steerGroup;
 
     // Quad Exhaust Tips for Nitro fire flames
-    const exhaustTips = [];
     const exhaustGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.25, 10);
     exhaustGeo.rotateX(Math.PI / 2);
     const exhaustPositions = [-0.22, -0.07, 0.07, 0.22];
     exhaustPositions.forEach(x => {
       const ex = new THREE.Mesh(exhaustGeo, chromeMat);
       ex.position.set(x, 0.32, -2.32);
-      carGroup.add(ex);
-      exhaustTips.push(ex);
+      container.add(ex);
+      carData.exhaustTips.push(ex);
     });
 
-    // SpotLight Beams & Taillights
-    let leftSpot = null;
-    let rightSpot = null;
-    if (isPlayer) {
-      leftSpot = new THREE.SpotLight(0xffffff, 3.8, 80, Math.PI / 6, 0.35, 1.2);
-      leftSpot.position.set(-0.72, 0.58, 2.15);
-      const leftTarget = new THREE.Object3D();
-      leftTarget.position.set(-0.72, 0, 45);
-      carGroup.add(leftSpot, leftTarget);
-      leftSpot.target = leftTarget;
-
-      rightSpot = new THREE.SpotLight(0xffffff, 3.8, 80, Math.PI / 6, 0.35, 1.2);
-      rightSpot.position.set(0.72, 0.58, 2.15);
-      const rightTarget = new THREE.Object3D();
-      rightTarget.position.set(0.72, 0, 45);
-      carGroup.add(rightSpot, rightTarget);
-      rightSpot.target = rightTarget;
-    }
-
-    // Taillight glowing bar & brake glow
+    // Taillight bar
     const tlGeo = new THREE.BoxGeometry(1.5, 0.08, 0.08);
     const tlMesh = new THREE.Mesh(tlGeo, tailLightMat);
     tlMesh.position.set(0, 0.62, -2.25);
-    carGroup.add(tlMesh);
-    tailLightMeshes.push(tlMesh);
+    container.add(tlMesh);
+    carData.tailLights.push(tlMesh);
 
-    const brakeGlowLight = new THREE.PointLight(0xff0022, 0.9, 8);
-    brakeGlowLight.position.set(0, 0.62, -2.5);
-    carGroup.add(brakeGlowLight);
-
-    // Neon Underglow
-    const underglowGeo = new THREE.PlaneGeometry(1.6, 3.6);
-    const underglowMat = new THREE.MeshBasicMaterial({
-      color: underglowColor,
-      transparent: true,
-      opacity: 0.75,
-      blending: THREE.AdditiveBlending
-    });
-    const underglow = new THREE.Mesh(underglowGeo, underglowMat);
-    underglow.rotation.x = -Math.PI / 2;
-    underglow.position.set(0, 0.06, 0);
-    carGroup.add(underglow);
-
-    const underglowLight = new THREE.PointLight(underglowColor, 1.3, 5.5);
-    underglowLight.position.set(0, 0.2, 0);
-    carGroup.add(underglowLight);
-
-    return {
-      group: carGroup,
-      type: 'hypercar',
-      wheels: wheels,
-      frontPivots: frontPivots,
-      steeringWheel: steerGroup,
-      exhaustTips: exhaustTips,
-      bodyMaterial: bodyMat,
-      underglowMesh: underglow,
-      underglowLight: underglowLight,
-      brakeGlow: brakeGlowLight,
-      tailLights: tailLightMeshes,
-      headlights: { leftSpot, rightSpot },
-      is3DModel: true
-    };
+    carData.is3DModel = true;
+    console.log('✨ Mounted Bugatti Chiron 3D model into vehicle container!');
   },
 
   /**
-   * Hot-swap procedural placeholder with 3D model once loaded
+   * Populate modelContainer with procedural meshes
    */
-  upgradeToBugattiModel: function(carData, config) {
-    if (!carData.group || !carData.group.parent) return;
+  populateProceduralModel: function(carData, config = {}) {
+    const { bodyColor = 0x00f0ff, type = 'hypercar' } = config;
+    const container = carData.modelContainer;
 
-    const parent = carData.group.parent;
-    const curPos = carData.group.position.clone();
-    const curRot = carData.group.rotation.clone();
+    while (container.children.length > 0) {
+      container.remove(container.children[0]);
+    }
 
-    parent.remove(carData.group);
-
-    const bugattiData = this.buildBugattiFrom3DModel(config);
-    bugattiData.group.position.copy(curPos);
-    bugattiData.group.rotation.copy(curRot);
-    parent.add(bugattiData.group);
-
-    // Transfer active properties
-    Object.assign(carData, bugattiData);
-    console.log('✨ Upgraded vehicle to high-poly Bugatti Chiron 3D model!');
-  },
-
-  /**
-   * Procedural Car Generator for Multiple Architectures
-   */
-  buildProceduralCar: function(config = {}) {
-    const {
-      bodyColor = 0x00f0ff,
-      type = 'hypercar',
-      isPlayer = false,
-      underglowColor = 0x00f0ff
-    } = config;
-
-    const carGroup = new THREE.Group();
-    carGroup.name = isPlayer ? `PlayerCar_${type}` : `TrafficCar_${type}`;
+    carData.wheels = [];
+    carData.frontPivots = [];
+    carData.tailLights = [];
+    carData.exhaustTips = [];
 
     const bodyMat = new THREE.MeshStandardMaterial({
       color: bodyColor,
@@ -463,6 +471,7 @@ const CarBuilder = {
       roughness: 0.16,
       envMapIntensity: 1.6
     });
+    carData.bodyMaterial = bodyMat;
 
     const carbonMat = new THREE.MeshStandardMaterial({
       color: 0x111827,
@@ -486,11 +495,6 @@ const CarBuilder = {
       roughness: 0.04
     });
 
-    const interiorMat = new THREE.MeshStandardMaterial({
-      color: 0x1e293b,
-      roughness: 0.8
-    });
-
     // Lower Chassis
     const chassisWidth = type === 'muscle' ? 2.25 : 2.1;
     const chassisGeo = new THREE.BoxGeometry(chassisWidth, 0.45, 4.4);
@@ -498,33 +502,29 @@ const CarBuilder = {
     chassis.position.y = 0.42;
     chassis.castShadow = true;
     chassis.receiveShadow = true;
-    carGroup.add(chassis);
+    container.add(chassis);
 
     let exhaustPositions = [-0.55, -0.38, 0.38, 0.55];
     let exhaustY = 0.28;
 
     if (type === 'hypercar') {
-      // Sculpted Bugatti-inspired aerodynamic curves
       const hoodGeo = new THREE.BoxGeometry(1.95, 0.28, 1.85);
       const hood = new THREE.Mesh(hoodGeo, bodyMat);
       hood.position.set(0, 0.62, 1.1);
       hood.rotation.x = 0.09;
       hood.castShadow = true;
-      carGroup.add(hood);
+      container.add(hood);
 
-      // Horseshoe front grill & splitter
       const splitterGeo = new THREE.BoxGeometry(2.18, 0.06, 0.75);
       const splitter = new THREE.Mesh(splitterGeo, carbonMat);
       splitter.position.set(0, 0.18, 2.22);
-      carGroup.add(splitter);
+      container.add(splitter);
 
-      // Cabin & Horseshoe C-bar signature
       const cabinGeo = new THREE.BoxGeometry(1.6, 0.6, 2.1);
       const cabin = new THREE.Mesh(cabinGeo, glassMat);
       cabin.position.set(0, 0.95, -0.2);
-      carGroup.add(cabin);
+      container.add(cabin);
 
-      // Rear GT Wing
       const wingGeo = new THREE.BoxGeometry(2.35, 0.06, 0.5);
       const wing = new THREE.Mesh(wingGeo, carbonMat);
       wing.position.set(0, 1.35, -2.15);
@@ -535,14 +535,13 @@ const CarBuilder = {
       uL.position.set(-0.75, 1.1, -2.1);
       const uR = uL.clone();
       uR.position.x = 0.75;
-      carGroup.add(wing, uL, uR);
+      container.add(wing, uL, uR);
 
-      // Rear Diffuser
       const diffGeo = new THREE.BoxGeometry(2.1, 0.22, 0.6);
       const diffuser = new THREE.Mesh(diffGeo, carbonMat);
       diffuser.position.set(0, 0.22, -2.15);
       diffuser.rotation.x = -0.15;
-      carGroup.add(diffuser);
+      container.add(diffuser);
 
       exhaustPositions = [-0.22, -0.07, 0.07, 0.22];
       exhaustY = 0.32;
@@ -552,23 +551,23 @@ const CarBuilder = {
       const hood = new THREE.Mesh(hoodGeo, bodyMat);
       hood.position.set(0, 0.66, 1.05);
       hood.rotation.x = 0.05;
-      carGroup.add(hood);
+      container.add(hood);
 
       const blowerGeo = new THREE.BoxGeometry(0.6, 0.22, 0.65);
       const blower = new THREE.Mesh(blowerGeo, chromeMat);
       blower.position.set(0, 0.88, 1.1);
-      carGroup.add(blower);
+      container.add(blower);
 
       const cabinGeo = new THREE.BoxGeometry(1.72, 0.62, 2.3);
       const cabin = new THREE.Mesh(cabinGeo, glassMat);
       cabin.position.set(0, 0.96, -0.2);
-      carGroup.add(cabin);
+      container.add(cabin);
 
       const ducktailGeo = new THREE.BoxGeometry(2.1, 0.2, 0.35);
       ducktailGeo.rotateX(0.4);
       const ducktail = new THREE.Mesh(ducktailGeo, carbonMat);
       ducktail.position.set(0, 0.85, -2.18);
-      carGroup.add(ducktail);
+      container.add(ducktail);
 
       exhaustPositions = [-0.65, -0.45, 0.45, 0.65];
 
@@ -577,22 +576,22 @@ const CarBuilder = {
       const hood = new THREE.Mesh(hoodGeo, bodyMat);
       hood.position.set(0, 0.58, 1.15);
       hood.rotation.x = 0.12;
-      carGroup.add(hood);
+      container.add(hood);
 
       const canopyGeo = new THREE.CylinderGeometry(0.75, 0.85, 2.1, 16);
       canopyGeo.rotateX(Math.PI / 2);
       const canopy = new THREE.Mesh(canopyGeo, glassMat);
       canopy.position.set(0, 0.95, -0.2);
-      carGroup.add(canopy);
+      container.add(canopy);
 
       const cyberStripGeo = new THREE.BoxGeometry(1.9, 0.08, 0.08);
       const cyberFront = new THREE.Mesh(cyberStripGeo, new THREE.MeshBasicMaterial({ color: 0x00f0ff }));
       cyberFront.position.set(0, 0.52, 2.22);
-      carGroup.add(cyberFront);
+      container.add(cyberFront);
 
       const cyberRear = new THREE.Mesh(cyberStripGeo, new THREE.MeshBasicMaterial({ color: 0xff0055 }));
       cyberRear.position.set(0, 0.65, -2.22);
-      carGroup.add(cyberRear);
+      container.add(cyberRear);
 
       exhaustPositions = [-0.25, 0.25];
       exhaustY = 0.35;
@@ -602,31 +601,30 @@ const CarBuilder = {
       const hood = new THREE.Mesh(hoodGeo, bodyMat);
       hood.position.set(0, 0.6, 1.1);
       hood.rotation.x = 0.1;
-      carGroup.add(hood);
+      container.add(hood);
 
       const stripeGeo = new THREE.BoxGeometry(0.2, 0.02, 4.3);
       const stripe = new THREE.Mesh(stripeGeo, new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.3 }));
       stripe.position.set(0, 0.74, 0);
-      carGroup.add(stripe);
+      container.add(stripe);
 
       const cabinGeo = new THREE.BoxGeometry(1.58, 0.52, 1.8);
       const cabin = new THREE.Mesh(cabinGeo, glassMat);
       cabin.position.set(0, 0.9, -0.2);
-      carGroup.add(cabin);
+      container.add(cabin);
 
       exhaustPositions = [-0.18, 0.18];
       exhaustY = 0.62;
     }
 
     // Exhausts
-    const exhaustTips = [];
     const exhaustGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.3, 12);
     exhaustGeo.rotateX(Math.PI / 2);
     exhaustPositions.forEach(x => {
       const ex = new THREE.Mesh(exhaustGeo, chromeMat);
       ex.position.set(x, exhaustY, -2.35);
-      carGroup.add(ex);
-      exhaustTips.push(ex);
+      container.add(ex);
+      carData.exhaustTips.push(ex);
     });
 
     // Interior & Steering Wheel
@@ -640,59 +638,20 @@ const CarBuilder = {
     steerGroup.add(new THREE.Mesh(wheelRingGeo, carbonMat), new THREE.Mesh(wheelCenterGeo, chromeMat));
     steerGroup.rotation.x = 0.35;
     interiorGroup.add(steerGroup);
-    carGroup.add(interiorGroup);
+    container.add(interiorGroup);
+    carData.steeringWheel = steerGroup;
 
-    // Lights
-    let leftSpot = null;
-    let rightSpot = null;
-    if (isPlayer) {
-      leftSpot = new THREE.SpotLight(0xffffff, 3.5, 75, Math.PI / 6, 0.35, 1.2);
-      leftSpot.position.set(-0.75, 0.6, 2.2);
-      const leftTarget = new THREE.Object3D();
-      leftTarget.position.set(-0.75, 0, 40);
-      carGroup.add(leftSpot, leftTarget);
-      leftSpot.target = leftTarget;
-
-      rightSpot = new THREE.SpotLight(0xffffff, 3.5, 75, Math.PI / 6, 0.35, 1.2);
-      rightSpot.position.set(0.75, 0.6, 2.2);
-      const rightTarget = new THREE.Object3D();
-      rightTarget.position.set(0.75, 0, 40);
-      carGroup.add(rightSpot, rightTarget);
-      rightSpot.target = rightTarget;
-    }
-
+    // Taillights
     const tailLightGeo = new THREE.BoxGeometry(0.75, 0.1, 0.08);
     const tailLightMat = new THREE.MeshBasicMaterial({ color: 0xef4444 });
     const tlL = new THREE.Mesh(tailLightGeo, tailLightMat);
     tlL.position.set(-0.6, 0.6, -2.22);
     const tlR = tlL.clone();
     tlR.position.x = 0.6;
-    carGroup.add(tlL, tlR);
-
-    const brakeGlowLight = new THREE.PointLight(0xff0033, 0.8, 8);
-    brakeGlowLight.position.set(0, 0.6, -2.5);
-    carGroup.add(brakeGlowLight);
-
-    // Underglow
-    const underglowGeo = new THREE.PlaneGeometry(1.6, 3.4);
-    const underglowMat = new THREE.MeshBasicMaterial({
-      color: underglowColor,
-      transparent: true,
-      opacity: 0.75,
-      blending: THREE.AdditiveBlending
-    });
-    const underglow = new THREE.Mesh(underglowGeo, underglowMat);
-    underglow.rotation.x = -Math.PI / 2;
-    underglow.position.set(0, 0.06, 0);
-    carGroup.add(underglow);
-
-    const underglowLight = new THREE.PointLight(underglowColor, 1.2, 5);
-    underglowLight.position.set(0, 0.2, 0);
-    carGroup.add(underglowLight);
+    container.add(tlL, tlR);
+    carData.tailLights.push(tlL, tlR);
 
     // Wheels
-    const wheels = [];
-    const frontWheelPivots = [];
     const wheelPositions = [
       { x: -1.08, y: 0.38, z: 1.35, isFront: true },
       { x: 1.08,  y: 0.38, z: 1.35, isFront: true },
@@ -725,29 +684,15 @@ const CarBuilder = {
         const pivot = new THREE.Group();
         pivot.position.set(pos.x, pos.y, pos.z);
         pivot.add(wheelGroup);
-        carGroup.add(pivot);
-        frontWheelPivots.push(pivot);
+        container.add(pivot);
+        carData.frontPivots.push(pivot);
       } else {
         wheelGroup.position.set(pos.x, pos.y, pos.z);
-        carGroup.add(wheelGroup);
+        container.add(wheelGroup);
       }
-      wheels.push(wheelGroup);
+      carData.wheels.push(wheelGroup);
     });
 
-    return {
-      group: carGroup,
-      type: type,
-      wheels: wheels,
-      frontPivots: frontWheelPivots,
-      steeringWheel: steerGroup,
-      exhaustTips: exhaustTips,
-      bodyMaterial: bodyMat,
-      underglowMesh: underglow,
-      underglowLight: underglowLight,
-      brakeGlow: brakeGlowLight,
-      tailLights: [tlL, tlR],
-      headlights: { leftSpot, rightSpot },
-      is3DModel: false
-    };
+    carData.is3DModel = false;
   }
 };

@@ -226,26 +226,29 @@ class GameEngine {
 
   handleKeyEvent(eventOrCode, isPressed) {
     if (this.isGameOver) return;
-    const code = typeof eventOrCode === 'string' ? eventOrCode : eventOrCode.code;
+    const e = typeof eventOrCode === 'object' ? eventOrCode : { code: eventOrCode, key: eventOrCode };
+    const code = e.code || '';
+    const key = (e.key || '').toLowerCase();
 
-    if (code === 'KeyW' || code === 'ArrowUp') this.keys.forward = isPressed;
-    if (code === 'KeyS' || code === 'ArrowDown') this.keys.backward = isPressed;
-    if (code === 'KeyA' || code === 'ArrowLeft') this.keys.left = isPressed;
-    if (code === 'KeyD' || code === 'ArrowRight') this.keys.right = isPressed;
-    if (code === 'Space') {
+    if (code === 'KeyW' || code === 'ArrowUp' || key === 'w' || key === 'arrowup') this.keys.forward = isPressed;
+    if (code === 'KeyS' || code === 'ArrowDown' || key === 's' || key === 'arrowdown') this.keys.backward = isPressed;
+    if (code === 'KeyA' || code === 'ArrowLeft' || key === 'a' || key === 'arrowleft') this.keys.left = isPressed;
+    if (code === 'KeyD' || code === 'ArrowRight' || key === 'd' || key === 'arrowright') this.keys.right = isPressed;
+    if (code === 'Space' || key === ' ' || key === 'spacebar') {
       this.keys.handbrake = isPressed;
-      if (isPressed && typeof eventOrCode === 'object' && eventOrCode.preventDefault) {
-        eventOrCode.preventDefault();
+      if (isPressed && e.preventDefault) {
+        e.preventDefault();
       }
     }
-    if (code === 'ShiftLeft' || code === 'ShiftRight' || code === 'KeyN') {
+    if (code === 'ShiftLeft' || code === 'ShiftRight' || code === 'KeyN' || key === 'shift' || key === 'n') {
       this.keys.nitro = isPressed;
     }
 
     if (isPressed) {
-      if (code === 'KeyC') this.cycleCamera();
-      if (code === 'KeyT') this.cycleWeather();
-      if (code === 'KeyM') this.toggleAudio();
+      if (code === 'KeyC' || key === 'c') this.cycleCamera();
+      if (code === 'KeyT' || key === 't') this.cycleWeather();
+      if (code === 'KeyM' || key === 'm') this.toggleAudio();
+      if (code === 'KeyG' || key === 'g') this.openGarage();
     }
   }
 
