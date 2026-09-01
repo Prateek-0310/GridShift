@@ -1,0 +1,12 @@
+# Dependencies
+node_modules/
+
+# Raw Blender binary archives (>100MB exceeds GitHub limit)
+*.blend
+*.blend1
+
+# Temporary & Log files
+.system_generated/
+*.log
+.DS_Store
+Thumbs.db

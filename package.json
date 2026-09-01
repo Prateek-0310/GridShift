@@ -1,0 +1,14 @@
+{
+  "name": "hyperdrive-3d-game",
+  "version": "1.0.0",
+  "description": "Ultra-Realistic 3D Web Driving Simulator with Bugatti Chiron 2017",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "prepare-model": "node scripts/prepare_bugatti.js"
+  },
+  "keywords": ["threejs", "3d-game", "webgl", "bugatti-chiron", "driving-simulator"],
+  "author": "Prateek Raj",
+  "license": "MIT"
+}
