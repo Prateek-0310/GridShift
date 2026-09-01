@@ -91,3 +91,201 @@ An immersive browser-based 3D driving simulator built with **Three.js** and **We
    ```bash
    git clone https://github.com/Prateek-0310/GridShift.git
    cd GridShift
+   ```
+
+2. **Install dependencies**
+   ```bash
+   npm install
+   ```
+
+3. **Start the development server**
+   ```bash
+   npm start
+   # or
+   npm run dev
+   ```
+
+4. **Open in browser**
+   ```
+   http://localhost:8080
+   ```
+
+---
+
+## 📁 Project Structure
+
+```
+GridShift/
+├── index.html              # Main HTML entry point with HUD & modals
+├── server.js              # Node.js HTTP server with MIME type handling
+├── package.json           # Project dependencies & scripts
+├── vercel.json            # Vercel deployment configuration
+│
+├── css/
+│   └── style.css         # Responsive HUD styles, glass-morphism UI
+│
+├── js/
+│   ├── game.js           # Main game loop & event handling
+│   ├── car.js            # Vehicle physics & model loading
+│   ├── city.js           # City environment & terrain
+│   ├── traffic.js        # AI traffic & pedestrian behaviors
+│   ├── weather.js        # Weather system & effects
+│   ├── particles.js      # Particle effects (smoke, sparks, collision)
+│   ├── audio.js          # Sound effects & engine audio
+│   └── textures.js       # Texture & material management
+│
+├── assets/               # 3D models, textures, and audio files
+└── scripts/
+    └── prepare_bugatti.js # Model preprocessing script
+```
+
+---
+
+## 🚀 Deployment
+
+### Deploy to Vercel
+
+The project is configured for **Vercel deployment**:
+
+```bash
+npm install -g vercel
+vercel
+```
+
+The `vercel.json` file handles all routing and server configuration automatically.
+
+---
+
+## 🎓 Technologies Used
+
+### **Frontend**
+- **Three.js** - 3D graphics rendering engine
+- **WebGL** - GPU-accelerated graphics
+- **HTML5 Canvas** - For minimap rendering
+- **Vanilla JavaScript** - Core game logic
+
+### **Backend**
+- **Node.js** - Server runtime
+- **HTTP Module** - Lightweight server
+
+### **3D Assets**
+- **GLTF Loader** - Load modern 3D models
+- **OBJ/MTL Loaders** - Load legacy 3D formats
+- **Blender** - 3D modeling & asset preparation
+
+---
+
+## 🎮 Gameplay Tips
+
+1. **Master Drifting** - Press Space to activate handbrake/drift for tight corners
+2. **Use Nitro Wisely** - Save your boost for straightaways to maximize speed
+3. **Near Miss Combos** - Drive close to traffic for bonus score multipliers
+4. **Camera Awareness** - Switch cameras (C) to get better spatial awareness
+5. **Weather Strategy** - Rain reduces traction; adjust driving style accordingly
+6. **Customize Your Ride** - Visit the Garage (G) to personalize your supercar
+
+---
+
+## 🎨 Customization Guide
+
+### Add New Car Models
+1. Prepare a GLTF or OBJ model in Blender
+2. Run: `npm run prepare-model`
+3. Add model selector card in the Garage modal
+4. Update `car.js` with new model loading logic
+
+### Modify Vehicle Colors
+Edit the color palette in the Garage modal section:
+```javascript
+// css/style.css or js/game.js
+const carColors = {
+  cyan: 0x00f0ff,
+  red: 0xff0055,
+  // Add new colors here
+};
+```
+
+### Adjust Physics
+Modify vehicle parameters in `js/car.js`:
+```javascript
+const vehicleConfig = {
+  maxSpeed: 300,
+  acceleration: 0.5,
+  maxSteerAngle: 0.5,
+  driftFactor: 1.2
+};
+```
+
+---
+
+## 📊 Performance Optimization
+
+- **LOD System** - Lower model detail at distance
+- **Culling** - Off-screen objects disabled
+- **Efficient Physics** - Optimized collision detection
+- **Texture Compression** - Reduced asset sizes
+- **Lazy Loading** - Models & textures loaded on-demand
+
+---
+
+## 🐛 Known Limitations
+
+- Requires modern browser with WebGL 2.0 support
+- Best performance on desktop devices
+- Mobile performance may vary based on device capability
+- Some weather effects disabled on lower-end hardware
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Feel free to:
+- Report bugs via [GitHub Issues](https://github.com/Prateek-0310/GridShift/issues)
+- Submit feature requests
+- Create pull requests with improvements
+
+---
+
+## 📝 License
+
+This project is licensed under the **MIT License** - see the LICENSE file for details.
+
+---
+
+## 👤 Author
+
+**Prateek Raj**
+- GitHub: [@Prateek-0310](https://github.com/Prateek-0310)
+
+---
+
+## 🎬 Demo & Screenshots
+
+To see HYPERDRIVE 3D in action:
+1. Clone and run the project locally
+2. Open `http://localhost:8080` in your browser
+3. Select a supercar from the garage
+4. Customize colors and underglow
+5. Hit the road and start driving!
+
+---
+
+## 📚 Additional Resources
+
+- [Three.js Documentation](https://threejs.org/docs/)
+- [WebGL Best Practices](https://www.khronos.org/webgl/)
+- [Blender 3D Modeling](https://www.blender.org/)
+
+---
+
+## ⭐ Support
+
+If you enjoy HYPERDRIVE 3D, please consider:
+- ⭐ Starring this repository
+- 🐛 Reporting bugs or suggesting features
+- 📢 Sharing the project with others
+- 💡 Contributing improvements
+
+---
+
+**Happy Driving! 🚀**
